@@ -1,0 +1,1778 @@
+
+IMPORT NECESSARY LIBRARIES
+import pandas as pd
+import numpy as np
+import docx
+import glob
+import warnings
+warnings.filterwarnings("ignore")
+import spacy
+import pickle
+import random
+
+from spacy import displacy
+import docx
+import spacy
+from spacy import schemas
+from spacy import Dict
+from spacy.lang.en.stop_words import STOP_WORDS
+import string
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+import textract
+import antiword
+import re
+import nltk
+from nltk.corpus import stopwords
+stop = stopwords.words('english')
+#nltk.download('punkt')
+#nltk.download('averaged_perceptron_tagger')
+#nltk.download('maxent_ne_chunker')
+#nltk.download('words')
+from spacy.matcher import Matcher
+#nltk.download('stopwords')
+#nltk.download('wordnet')
+
+from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
+from nltk.stem import WordNetLemmatizer
+nlp = spacy.load("en_core_web_trf")
+IMPORT DATASETS
+data1 = pd.read_csv("D:\EXCLER solution\Project Files\DS Project Resume NLP\CSV FILES of Resumes\intership_resumes.csv")
+data2 = pd.read_csv("D:\EXCLER solution\Project Files\DS Project Resume NLP\CSV FILES of Resumes\Peoplesoft_Resumes.csv")
+data3 = pd.read_csv("D:\EXCLER solution\Project Files\DS Project Resume NLP\CSV FILES of Resumes\React_Developer_resumes.csv")
+data4 = pd.read_csv("D:\EXCLER solution\Project Files\DS Project Resume NLP\CSV FILES of Resumes\SQLDeveloperLightning_Resumes.csv")
+data5 = pd.read_csv("D:\EXCLER solution\Project Files\DS Project Resume NLP\CSV FILES of Resumes\workday_resumes.csv")
+Resume = pd.concat([data1,data2,data3,data4,data5],axis=0)
+Resume = Resume.reset_index()
+Resume = Resume.drop(columns='Number',axis=0)
+Resume = Resume.drop(columns='index',axis=0)
+Resume
+Label	CV
+0	Internship	Name: Ravali P Curriculum Vitae Specialization...
+1	Internship	SUSOVAN BAG Seeking a challenging position in ...
+2	Peoplesoft	Anubhav Kumar Singh To work in a globally comp...
+3	Peoplesoft	Profile Summary: 7+ years of experience in imp...
+4	Peoplesoft	PeopleSoft Database Administrator Gangareddy P...
+...	...	...
+74	workdayResumes	Workday Integration Consultant Name : Sri Kris...
+75	workdayResumes	SRIKANTH (WORKDAY HCM CONSULTANT) Seeking suit...
+76	workdayResumes	WORKDAY | HCM | FCM Name : Kumar S.S Role : Wo...
+77	workdayResumes	Venkateswarlu.B Workday Consultant Having 5.3 ...
+78	workdayResumes	Vinay kumar .v Workday Functional Consultant E...
+79 rows × 2 columns
+
+Exploratory Data Analysis (EDA)
+Resume.info()
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 79 entries, 0 to 78
+Data columns (total 2 columns):
+ #   Column  Non-Null Count  Dtype 
+---  ------  --------------  ----- 
+ 0   Label   79 non-null     object
+ 1   CV      79 non-null     object
+dtypes: object(2)
+memory usage: 1.4+ KB
+Resume.isnull().sum()
+Label    0
+CV       0
+dtype: int64
+Calculating each Characterstic in dataframe BEFORE CLEANING
+before_characters=Resume["CV"].apply(len)
+before_characters
+0     2114
+1     1310
+2     6967
+3     7271
+4     5908
+      ... 
+74    6512
+75    6156
+76    7205
+77    2610
+78    4919
+Name: CV, Length: 79, dtype: int64
+print('Total Number of characters before cleaning dataset :',before_characters.sum())
+print('Mean of each characters before cleaning the dataset:',before_characters.mean())
+print('Median of characters before cleaning the dataset:',before_characters.median())
+print('Standard Deviation of characters before cleaning the dataset:',before_characters.std())
+print('skew of characters before cleaning the dataset:',before_characters.skew())
+Total Number of characters before cleaning dataset : 362913
+Mean of each characters before cleaning the dataset: 4593.835443037975
+Median of characters before cleaning the dataset: 3696.0
+Standard Deviation of characters before cleaning the dataset: 3021.5634619556013
+skew of characters before cleaning the dataset: 1.8420390755120162
+Calculating each WORD Characterstic in dataframe BEFORE cleaning
+before_words = Resume['CV'].apply(lambda x: len(str(x).split(' ')))
+before_words
+0      280
+1      184
+2      934
+3      987
+4      786
+      ... 
+74     889
+75     878
+76    1027
+77     352
+78     681
+Name: CV, Length: 79, dtype: int64
+print('Total Number of Word in dataset before cleaning:',before_words.sum())
+print('Mean of each Word in dataset before cleaning:',before_words.mean())
+print('Median of Word in dataset before cleaning:',before_words.median())
+print('Standard Deviation of Word in dataset before cleaning:',before_words.std())
+print('skew of Word dataset before cleaning:',before_words.skew())
+Total Number of Word in dataset before cleaning: 51305
+Mean of each Word in dataset before cleaning: 649.4303797468355
+Median of Word in dataset before cleaning: 514.0
+Standard Deviation of Word in dataset before cleaning: 422.97516698471946
+skew of Word dataset before cleaning: 1.8389509436825116
+Data Preprocessing
+We will perform label encoding to convert category variable from string datatype to float datatype
+from sklearn.preprocessing import LabelEncoder
+le_encoder = LabelEncoder()
+Resume["Encoded_Skill"] = le_encoder.fit_transform(Resume["Label"])
+Resume.head()
+Label	CV	Encoded_Skill
+0	Internship	Name: Ravali P Curriculum Vitae Specialization...	0
+1	Internship	SUSOVAN BAG Seeking a challenging position in ...	0
+2	Peoplesoft	Anubhav Kumar Singh To work in a globally comp...	1
+3	Peoplesoft	Profile Summary: 7+ years of experience in imp...	1
+4	Peoplesoft	PeopleSoft Database Administrator Gangareddy P...	1
+Resume.Label.value_counts()
+ReactDeveloper    22
+workdayResumes    21
+Peoplesoft        20
+SQLDeveloper      14
+Internship         2
+Name: Label, dtype: int64
+print("Displaying the distinct categories of resume -")
+print(Resume.Label.unique())
+Displaying the distinct categories of resume -
+['Internship' 'Peoplesoft' 'ReactDeveloper' 'SQLDeveloper'
+ 'workdayResumes']
+Data Cleaning
+import re #REGULAR EXPRESSION
+import string
+
+def clean_text(CV):
+    '''Make text lowercase, remove text in square brackets, remove punctuation and remove words containing numbers.'''
+    CV = CV.lower()
+    CV = re.sub('\[.*?\]', '', CV)
+    CV = re.sub('[%s]' % re.escape(string.punctuation), '', CV)
+    CV = re.sub('\w*\d\w*', '', CV)
+    CV = re.sub("[0-9" "]+"," ",CV)
+    CV = re.sub('[‘’“”…]', '', CV)
+    return CV
+
+clean = lambda x: clean_text(x)
+Resume['CV'] = Resume.CV.apply(clean)
+Resume.CV
+0     name ravali p curriculum vitae specialization ...
+1     susovan bag seeking a challenging position in ...
+2     anubhav kumar singh to work in a globally comp...
+3     profile summary  years of experience in implem...
+4     peoplesoft database administrator gangareddy p...
+                            ...                        
+74    workday integration consultant name  sri krish...
+75    srikanth workday hcm consultant seeking suitab...
+76    workday  hcm  fcm name  kumar ss role  workday...
+77    venkateswarlub workday consultant having  year...
+78    vinay kumar v workday functional consultant ex...
+Name: CV, Length: 79, dtype: object
+Word frequency BEFORE removal of STOPWORDS
+#Word Frequency
+frequency = pd.Series(' '.join(Resume['CV']).split()).value_counts()[:20] #For top 20
+frequency
+and            2696
+the            1329
+in             1244
+to             1048
+of              961
+for             636
+on              625
+experience      572
+with            410
+as              391
+peoplesoft      386
+application     378
+using           375
+workday         368
+server          317
+a               307
+from            296
+reports         295
+data            285
+project         265
+dtype: int64
+Removing STOPWORDS
+from nltk.corpus import stopwords
+stop = stopwords.words('english')
+Resume['CV'] = Resume['CV'].apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+Word frequency AFTER removal of STOPWORDS
+frequency_Sw = pd.Series(' '.join(Resume['CV']).split()).value_counts()[:20] # for top 20
+frequency_Sw
+experience      572
+peoplesoft      386
+application     378
+using           375
+workday         368
+server          317
+reports         295
+data            285
+project         265
+business        250
+process         220
+database        217
+web             214
+knowledge       201
+sql             196
+worked          195
+involved        184
+integrations    175
+like            169
+integration     167
+dtype: int64
+ 
+ 
+ 
+ 
+ 
+Performing A NER (Using Spacy)
+nlp = spacy.load("en_core_web_trf")
+text=nlp(Resume["CV"][0])
+displacy.render(text, style = "ent")
+name ravali p curriculum vitae specialization computer science engg utilize technical skills achieving target developing best performance organization manual testing skills strong knowledge sdlc concepts extensive knowledge white box testing good knowledge functional testing integration testing extreme knowledge system testing good knowledge adhoc testing reliability testing good knowledge exploratory testing good knowledge stlc concepts good knowledge test cases test scenarios good knowledge globalization testing compatibility testing knowledge regression testing good knowledge test plan agile methdology good knowledge scrum methodology expertise sprint planning meeting good knowledge scrum meeting extreme knowledge sprint retrospective meeting good knowledge product backlog meeting bug triage meeting extreme knowledge normalization java skills good knowledge method overloading method overriding good understanding static nonstatic good understanding variables good knowledge constructor good knowledge abstraction good knowledge encapsulation good knowledge inheritance good knowledge collections training courses industrial exposure achievements im certified cyber security training sjbit bengaluru im certified volleyball olympics distict level assignements identified functional test cases flipkartcom ORG identified integration test cases whatsapp ORG identified integration test cases amazoncom ORG found defects ft usability camaptibility globalization testing strengths date birth gender female father name fasala reddy PERSON n languages known english NORP telugukannadahindi NORP nationality indian NORP address thirumaladevarahallivparthihallip kodigenahallihmadhugirittumkurd PERSON state karnataka hereby declare abovementioned information true best knowledge yoursincerely ravali p place bangalore
+First take a look at the number of Characters present in each sentence. This can give us a rough idea about the resume length
+Calculating each Characterstic in dataframe
+characters=Resume["CV"].apply(len)
+characters
+0     1784
+1     1078
+2     5804
+3     5931
+4     4795
+      ... 
+74    5516
+75    5146
+76    6046
+77    2154
+78    4131
+Name: CV, Length: 79, dtype: int64
+print('Total Number of characters dataset:',characters.sum())
+print('Mean of each characters in datset:',characters.mean())
+print('Median of characters in dataset:',characters.median())
+print('Standard Deviation of characters in dataset:',characters.std())
+print('skew of characters dataset:',characters.skew())
+Total Number of characters dataset: 295942
+Mean of each characters in datset: 3746.1012658227846
+Median of characters in dataset: 3015.0
+Standard Deviation of characters in dataset: 2487.3184489600117
+skew of characters dataset: 1.7826848176246577
+import seaborn as sns
+import matplotlib.pyplot as plt
+sns.distplot(x = characters)
+<AxesSubplot:ylabel='Density'>
+
+Calculating each Word Characterstic in dataframe
+words = Resume['CV'].apply(lambda x: len(str(x).split(' ')))
+words
+0     207
+1     130
+2     685
+3     707
+4     553
+     ... 
+74    658
+75    644
+76    768
+77    259
+78    500
+Name: CV, Length: 79, dtype: int64
+print('Total Number of Word in dataset:',words.sum())
+print('Mean of each Word in datset:',words.mean())
+print('Median of Word in dataset:',words.median())
+print('Standard Deviation of Word in dataset:',words.std())
+print('skew of Word dataset:',words.skew())
+Total Number of Word in dataset: 36185
+Mean of each Word in datset: 458.0379746835443
+Median of Word in dataset: 380.0
+Standard Deviation of Word in dataset: 295.5711308826187
+skew of Word dataset: 1.6889132345848146
+sns.distplot(x = words)
+<AxesSubplot:ylabel='Density'>
+
+VISUALIZATION OF DATASET
+import seaborn as sns
+import matplotlib.pyplot as plt
+plt.style.use('seaborn-dark-palette')
+plt.figure(figsize=(15,7))
+plt.title("The distinct categories of resumes")
+plt.xticks(rotation=90)
+sns.countplot(y="Label", data=Resume,palette=("Set2"))
+plt.show()
+
+from matplotlib.gridspec import GridSpec
+targetCounts = Resume.Label.value_counts()
+targetLabels  = Resume.Label.unique()
+# Make square figures and axes
+plt.figure(1, figsize=(25,25))
+the_grid = GridSpec(2, 2)
+
+
+cmap = plt.get_cmap('plasma')
+colors = ['#ff9999','#66b3ff','#99ff99','#ffcc99','#c2c2f0']
+plt.subplot(the_grid[0, 1], aspect=1, title='CATEGORY DISTRIBUTION')
+
+
+source_pie = plt.pie(targetCounts, labels=targetLabels, autopct='%1.1f%%', shadow=True, colors=colors)
+plt.show()
+
+ 
+Feature Extraction
+from collections import Counter
+import seaborn as sns
+words =['using','Workday','Experience','PeopleSoft',
+ 'experience','SQL','Application','data','Server',
+ 'business','Project','reports','like','HCM','Worked',
+ 'knowledge','Involved','various','Good', 'Reports','React','EIB','integrations','Web','system','creating','issues',
+ 'Created', 'Responsibilities','Process','process','support', 
+ 'application','new','People','I','team','working', 
+ 'Database','database','Integration','Domains','client', 
+ 'requirements','Core',  'Business', 
+'Oracle','Report', 'Developer', 'Data']
+indices = np.random.zipf(1.6, size=500).astype(np.int) % len(words)
+tw = np.array(words)[indices]
+
+tf = Counter(tw)
+
+y = [count for tag, count in tf.most_common(50)]
+x = [tag for tag, count in tf.most_common(50)]
+plt.style.use('seaborn-dark-palette')
+plt.figure(figsize=(12,5))
+plt.bar(x, y, color=['gold','lightcoral', 'lightskyblue'])
+plt.title("Word frequencies in Resume Data in Log Scale")
+plt.ylabel("Frequency (log scale)")
+plt.yscale('symlog') # optionally set a log scale for the y-axis
+plt.xticks(rotation=90)
+for i, (tag, count) in enumerate(tf.most_common(50)):
+    plt.text(i, count, f' {count} ', rotation=90,
+             ha='center', va='top' if i < 10 else 'bottom', color='white' if i < 10 else 'black')
+plt.xlim(-0.6, len(x)-0.4) # optionally set tighter x lims
+plt.tight_layout() # change the whitespace such that all labels fit nicely
+plt.show()
+
+def wordBarGraphFunction_1(df,column,title):
+    topic_words = [ z.lower() for y in
+                       [ x.split() for x in df[column] if isinstance(x, str)]
+                       for z in y]
+    word_count_dict = dict(Counter(topic_words))
+    popular_words = sorted(word_count_dict, key = word_count_dict.get, reverse = True)
+    popular_words_nonstop = [w for w in popular_words if w not in stopwords.words("english")]
+    plt.style.use('fivethirtyeight')
+    sns.barplot(x=np.arange(20),y= [word_count_dict[w] for w in reversed(popular_words_nonstop[0:20])])
+    plt.xticks([x + 0.5 for x in range(20)], reversed(popular_words_nonstop[0:20]),rotation=90)
+    plt.title(title)
+    plt.show()
+plt.figure(figsize=(15,6))
+wordBarGraphFunction_1(Resume,"CV","Most frequent Words ")
+
+WORDCLOUD
+# Import packages
+import matplotlib.pyplot as plt
+%matplotlib inline
+from wordcloud import WordCloud, STOPWORDS
+# Define a function to plot word cloud
+def plot_cloud(wordcloud):
+    # Set figure size
+    plt.figure(figsize=(40, 30))
+    # Display image
+    plt.imshow(wordcloud) 
+    # No axis details
+    plt.axis("off");
+# Generate wordcloud
+stopwords = STOPWORDS
+stopwords.add('will')
+wordcloud = WordCloud(width = 3000, height = 2000, background_color='black', max_words=100,colormap='Set2',stopwords=stopwords).generate(str(Resume))
+# Plot
+plot_cloud(wordcloud)
+
+Bag Of Words
+requiredText = Resume["CV"]
+requiredTarget = Resume["Encoded_Skill"].values
+Countvectorizer=CountVectorizer(analyzer='word',token_pattern=r'\w{1,}',stop_words = 'english')
+bag = Countvectorizer.fit_transform(requiredText)
+Countvectorizer.vocabulary_
+{'ravali': 3137,
+ 'p': 2706,
+ 'curriculum': 914,
+ 'vitae': 4200,
+ 'specialization': 3623,
+ 'computer': 722,
+ 'science': 3417,
+ 'engg': 1270,
+ 'utilize': 4118,
+ 'technical': 3870,
+ 'skills': 3570,
+ 'achieving': 39,
+ 'target': 3844,
+ 'developing': 1075,
+ 'best': 394,
+ 'performance': 2795,
+ 'organization': 2667,
+ 'manual': 2292,
+ 'testing': 3909,
+ 'strong': 3738,
+ 'knowledge': 2107,
+ 'sdlc': 3435,
+ 'concepts': 727,
+ 'extensive': 1386,
+ 'white': 4262,
+ 'box': 448,
+ 'good': 1609,
+ 'functional': 1537,
+ 'integration': 1952,
+ 'extreme': 1393,
+ 'adhoc': 72,
+ 'reliability': 3225,
+ 'exploratory': 1375,
+ 'stlc': 3716,
+ 'test': 3905,
+ 'cases': 545,
+ 'scenarios': 3401,
+ 'globalization': 1595,
+ 'compatibility': 700,
+ 'regression': 3211,
+ 'plan': 2846,
+ 'agile': 108,
+ 'methdology': 2374,
+ 'scrum': 3434,
+ 'methodology': 2378,
+ 'expertise': 1371,
+ 'sprint': 3645,
+ 'planning': 2848,
+ 'meeting': 2356,
+ 'retrospective': 3312,
+ 'product': 2983,
+ 'backlog': 340,
+ 'bug': 479,
+ 'triage': 4018,
+ 'normalization': 2562,
+ 'java': 2034,
+ 'method': 2375,
+ 'overloading': 2696,
+ 'overriding': 2697,
+ 'understanding': 4061,
+ 'static': 3707,
+ 'nonstatic': 2560,
+ 'variables': 4141,
+ 'constructor': 776,
+ 'abstraction': 12,
+ 'encapsulation': 1256,
+ 'inheritance': 1912,
+ 'collections': 662,
+ 'training': 3986,
+ 'courses': 854,
+ 'industrial': 1899,
+ 'exposure': 1381,
+ 'achievements': 37,
+ 'im': 1833,
+ 'certified': 581,
+ 'cyber': 931,
+ 'security': 3447,
+ 'sjbit': 3566,
+ 'bengaluru': 393,
+ 'volleyball': 4211,
+ 'olympics': 2620,
+ 'distict': 1128,
+ 'level': 2163,
+ 'assignements': 263,
+ 'identified': 1816,
+ 'flipkartcom': 1478,
+ 'whatsapp': 4260,
+ 'amazoncom': 148,
+ 'defects': 992,
+ 'ft': 1528,
+ 'usability': 4099,
+ 'camaptibility': 512,
+ 'strengths': 3734,
+ 'date': 952,
+ 'birth': 415,
+ 'gender': 1571,
+ 'female': 1439,
+ 'father': 1422,
+ 'fasala': 1419,
+ 'reddy': 3186,
+ 'n': 2489,
+ 'languages': 2129,
+ 'known': 2109,
+ 'english': 1279,
+ 'telugukannadahindi': 3889,
+ 'nationality': 2508,
+ 'indian': 1890,
+ 'address': 67,
+ 'thirumaladevarahallivparthihallip': 3924,
+ 'kodigenahallihmadhugirittumkurd': 2110,
+ 'state': 3702,
+ 'karnataka': 2085,
+ 'declare': 984,
+ 'abovementioned': 6,
+ 'information': 1905,
+ 'true': 4026,
+ 'yoursincerely': 4338,
+ 'place': 2842,
+ 'bangalore': 354,
+ 'susovan': 3806,
+ 'bag': 345,
+ 'seeking': 3449,
+ 'challenging': 588,
+ 'position': 2881,
+ 'field': 1446,
+ 'technology': 3880,
+ 'individual': 1893,
+ 'growth': 1651,
+ 'enhance': 1281,
+ 'academic': 13,
+ 'learning': 2152,
+ 'ccna': 561,
+ 'routing': 3357,
+ 'switching': 3812,
+ 'subnetting': 3759,
+ 'programming': 3005,
+ 'c': 500,
+ 'cjava': 617,
+ 'htmlcss': 1783,
+ 'sql': 3647,
+ 'oops': 2630,
+ 'algorithms': 133,
+ 'data': 943,
+ 'structuresdbms': 3742,
+ 'networking': 2535,
+ 'os': 2679,
+ 'linux': 2192,
+ 'administration': 81,
+ 'troubleshooting': 4025,
+ 'soft': 3591,
+ 'leadership': 2145,
+ 'collaboration': 659,
+ 'communication': 689,
+ 'customer': 918,
+ 'handling': 1679,
+ 'englishfluent': 1280,
+ 'hindifluent': 1735,
+ 'bengalinative': 392,
+ 'telugu': 3887,
+ 'projects': 3008,
+ 'smart': 3582,
+ 'agriculture': 113,
+ 'built': 488,
+ 'farmers': 1418,
+ 'using': 4111,
+ 'iot': 2007,
+ 'solution': 3599,
+ 'automatic': 303,
+ 'water': 4233,
+ 'motor': 2447,
+ 'controller': 807,
+ 'android': 178,
+ 'api': 194,
+ 'technologies': 3879,
+ 'combined': 672,
+ 'automate': 301,
+ 'work': 4281,
+ 'controllers': 808,
+ 'sensors': 3468,
+ 'bookstore': 437,
+ 'management': 2275,
+ 'interface': 1971,
+ 'pp': 2895,
+ 'manage': 2273,
+ 'purchase': 3065,
+ 'return': 3313,
+ 'books': 436,
+ 'store': 3721,
+ 'hotel': 1762,
+ 'systemdec': 3824,
+ 'designed': 1048,
+ 'end': 1260,
+ 'module': 2421,
+ 'website': 4251,
+ 'online': 2624,
+ 'movie': 2455,
+ 'ticket': 3933,
+ 'booking': 435,
+ 'fully': 1534,
+ 'functioning': 1540,
+ 'htmlcssjavascript': 1785,
+ 'education': 1202,
+ 'background': 339,
+ 'lovely': 2236,
+ 'professional': 2989,
+ 'university': 4071,
+ 'punjab': 3062,
+ 'india': 1889,
+ 'btech': 475,
+ 'engineering': 1273,
+ 'gpa': 1621,
+ 'hobbies': 1742,
+ 'web': 4241,
+ 'surfing': 3803,
+ 'cricketcarromchess': 879,
+ 'anubhav': 191,
+ 'kumar': 2118,
+ 'singh': 3556,
+ 'globally': 1596,
+ 'competitive': 705,
+ 'environment': 1302,
+ 'assignments': 266,
+ 'shall': 3509,
+ 'yield': 4332,
+ 'twin': 4035,
+ 'benefits': 390,
+ 'job': 2045,
+ 'satisfaction': 3389,
+ 'steadypaced': 3711,
+ 'experience': 1366,
+ 'current': 911,
+ 'hcl': 1695,
+ 'role': 3342,
+ 'admin': 74,
+ 'offshore': 2616,
+ 'shell': 3516,
+ 'scripting': 3431,
+ 'peoplesoft': 2790,
+ 'github': 1585,
+ 'managing': 2284,
+ 'hcm': 1696,
+ 'fscm': 1525,
+ 'production': 2984,
+ 'environments': 1304,
+ 'support': 3796,
+ 'installed': 1936,
+ 'windows': 4268,
+ 'involved': 2000,
+ 'day': 956,
+ 'activities': 53,
+ 'project': 3007,
+ 'migration': 2390,
+ 'database': 944,
+ 'refresh': 3201,
+ 'changes': 591,
+ 'tax': 3854,
+ 'updates': 4085,
+ 'various': 4144,
+ 'servers': 3482,
+ 'like': 2180,
+ 'application': 201,
+ 'process': 2971,
+ 'scheduler': 3405,
+ 'applying': 208,
+ 'tuxedo': 4032,
+ 'weblogic': 4243,
+ 'middleware': 2387,
+ 'cpu': 858,
+ 'patches': 2755,
+ 'applications': 202,
+ 'working': 4296,
+ 'used': 4103,
+ 'exchange': 1346,
+ 'files': 1449,
+ 'external': 1388,
+ 'systems': 3825,
+ 'installation': 1932,
+ 'setup': 3498,
+ 'requirement': 3261,
+ 'reviewing': 3321,
+ 'vulnerabilities': 4220,
+ 'reported': 3247,
+ 'teams': 3863,
+ 'renewal': 3238,
+ 'ssl': 3672,
+ 'vulnerability': 4221,
+ 'remediation': 3231,
+ 'report': 3246,
+ 'rmis': 3336,
+ 'team': 3859,
+ 'worked': 4289,
+ 'pum': 3056,
+ 'update': 4082,
+ 'manager': 2278,
+ 'dpk': 1157,
+ 'ansible': 188,
+ 'docker': 1136,
+ 'new': 2537,
+ 'scripts': 3433,
+ 'script': 3430,
+ 'failures': 1407,
+ 'techmahindra': 3868,
+ 'roleproject': 3344,
+ 'automationdevops': 307,
+ 'tools': 3960,
+ 'jenkins': 2038,
+ 'people': 2787,
+ 'upgrade': 4089,
+ 'ntt': 2579,
+ 'cloud': 639,
+ 'onpremises': 2626,
+ 'aws': 326,
+ 'automated': 302,
+ 'startstop': 3698,
+ 'basic': 370,
+ 'certificates': 578,
+ 'released': 3220,
+ 'elastic': 1220,
+ 'search': 3437,
+ 'configuration': 747,
+ 'gained': 1553,
+ 'resources': 3281,
+ 'unix': 4074,
+ 'architecturecommand': 235,
+ 'trouble': 4022,
+ 'shooting': 3522,
+ 'unixlinux': 4075,
+ 'platform': 2853,
+ 'efficient': 1211,
+ 'deployment': 1037,
+ 'tool': 3959,
+ 'scheduling': 3408,
+ 'crontab': 883,
+ 'ibm': 1805,
+ 'tivoli': 3954,
+ 'workload': 4298,
+ 'tws': 4037,
+ 'automation': 306,
+ 'continuous': 798,
+ 'installing': 1938,
+ 'configuring': 751,
+ 'responsible': 3287,
+ 'writing': 4312,
+ 'playbook': 2856,
+ 'perform': 2794,
+ 'task': 3846,
+ 'managed': 2274,
+ 'tasks': 3847,
+ 'related': 3214,
+ 'issue': 2015,
+ 'certification': 579,
+ 'products': 2987,
+ 'platforms': 2854,
+ 'browsers': 471,
+ 'peopletools': 2792,
+ 'server': 3479,
+ 'amazon': 147,
+ 'service': 3485,
+ 'components': 717,
+ 'logic': 2216,
+ 'release': 3219,
+ 'latest': 2134,
+ 'patch': 2754,
+ 'change': 589,
+ 'assistant': 270,
+ 'passes': 2745,
+ 'creating': 866,
+ 'running': 3367,
+ 'setting': 3496,
+ 'monitor': 2429,
+ 'app': 196,
+ 'domains': 1150,
+ 'post': 2887,
+ 'severs': 3504,
+ 'common': 685,
+ 'domain': 1148,
+ 'boot': 440,
+ 'problems': 2967,
+ 'identifying': 1818,
+ 'source': 3609,
+ 'databases': 945,
+ 'ca': 501,
+ 'images': 1835,
+ 'packages': 2709,
+ 'sourcetarget': 3611,
+ 'srdt': 3656,
+ 'pvt': 3078,
+ 'srm': 3661,
+ 'group': 1642,
+ 'designer': 1050,
+ 'campus': 514,
+ 'maintaining': 2260,
+ 'supporting': 3799,
+ 'oracle': 2658,
+ 'possess': 2885,
+ 'architecture': 234,
+ 'administering': 79,
+ 'pia': 2831,
+ 'internet': 1981,
+ 'broker': 469,
+ 'nodes': 2553,
+ 'issues': 2017,
+ 'migrations': 2391,
+ 'ps': 3036,
+ 'bundle': 491,
+ 'refreshed': 3202,
+ 'dev': 1068,
+ 'preprod': 2921,
+ 'prod': 2979,
+ 'experienced': 1367,
+ 'providing': 3029,
+ 'development': 1077,
+ 'hrms': 1776,
+ 'cs': 894,
+ 'configured': 750,
+ 'ses': 3492,
+ 'secure': 3445,
+ 'enterprise': 1294,
+ 'instance': 1939,
+ 'policy': 2871,
+ 'modelling': 2412,
+ 'opa': 2632,
+ 'existing': 1358,
+ 'implemented': 1846,
+ 'single': 3558,
+ 'sign': 3537,
+ 'interaction': 1965,
+ 'hub': 1793,
+ 'integrate': 1948,
+ 'content': 793,
+ 'upgraded': 4090,
+ 'finance': 1457,
+ 'image': 1834,
+ 'bugs': 480,
+ 'tailored': 3834,
+ 'dbua': 963,
+ 'created': 863,
+ 'instances': 1940,
+ 'provide': 3025,
+ 'prepared': 2919,
+ 'status': 3710,
+ 'reports': 3249,
+ 'sheets': 3515,
+ 'coordinated': 826,
+ 'provided': 3026,
+ 'imported': 1851,
+ 'self': 3453,
+ 'signed': 3541,
+ 'certificate': 577,
+ 'port': 2879,
+ 'access': 19,
+ 'set': 3494,
+ 'terminal': 3898,
+ 'central': 573,
+ 'technicaldevelopers': 3871,
+ 'tickets': 3935,
+ 'followed': 1486,
+ 'resolution': 3273,
+ 'error': 1312,
+ 'occurred': 2596,
+ 'client': 630,
+ 'drdo': 1161,
+ 'description': 1043,
+ 'signon': 3544,
+ 'sso': 3675,
+ 'property': 3015,
+ 'control': 805,
+ 'multiple': 2472,
+ 'independent': 1882,
+ 'software': 3593,
+ 'user': 4105,
+ 'logs': 2223,
+ 'id': 1810,
+ 'password': 2749,
+ 'gain': 1552,
+ 'connected': 758,
+ 'different': 1093,
+ 'usernames': 4108,
+ 'passwords': 2750,
+ 'netapp': 2532,
+ 'maintenance': 2262,
+ 'peopletool': 2791,
+ 'handled': 1676,
+ 'ib': 1804,
+ 'clear': 625,
+ 'cache': 502,
+ 'weekly': 4255,
+ 'psadmin': 3037,
+ 'acs': 45,
+ 'personal': 2809,
+ 'details': 1063,
+ 'profile': 2995,
+ 'summary': 3781,
+ 'years': 4330,
+ 'implementing': 1848,
+ 'upgrading': 4092,
+ 'including': 1873,
+ 'human': 1794,
+ 'capital': 525,
+ 'financials': 1459,
+ 'solutions': 3600,
+ 'portal': 2880,
+ 'ihub': 1826,
+ 'indepth': 1884,
+ 'analysis': 162,
+ 'implementation': 1843,
+ 'stages': 3683,
+ 'load': 2201,
+ 'quality': 3094,
+ 'assurance': 276,
+ 'tuning': 4029,
+ 'deploying': 1036,
+ 'skilled': 3569,
+ 'capability': 520,
+ 'analyse': 159,
+ 'interpret': 1985,
+ 'unique': 4066,
+ 'combination': 671,
+ 'logical': 2217,
+ 'thinking': 3922,
+ 'right': 3327,
+ 'core': 834,
+ 'competencies': 703,
+ 'install': 1931,
+ 'configure': 749,
+ 'upgrades': 4091,
+ 'refreshes': 3203,
+ 'cloning': 633,
+ 'workflow': 4292,
+ 'users': 4109,
+ 'monitoring': 2431,
+ 'log': 2212,
+ 'bottleneck': 446,
+ 'resetting': 3270,
+ 'lockingunlocking': 2211,
+ 'profiles': 2998,
+ 'middle': 2386,
+ 'tier': 3936,
+ 'quarterly': 3098,
+ 'apply': 207,
+ 'fixes': 1471,
+ 'sets': 3495,
+ 'infrastructureiaas': 1911,
+ 'managerlift': 2280,
+ 'shift': 3517,
+ 'idc': 1811,
+ 'sol': 3594,
+ 'clients': 632,
+ 'texas': 3911,
+ 'department': 1028,
+ 'transportationtxdot': 4009,
+ 'duration': 1177,
+ 'aug': 293,
+ 'till': 3940,
+ 'dba': 960,
+ 'responsibilities': 3285,
+ 'performing': 2797,
+ 'phire': 2822,
+ 'patchingjava': 2757,
+ 'wls': 4276,
+ 'jdk': 2037,
+ 'posting': 2889,
+ 'resolved': 3276,
+ 'developer': 1073,
+ 'examining': 1338,
+ 'clearing': 627,
+ 'monthly': 2434,
+ 'maintained': 2259,
+ 'documentation': 1140,
+ 'non': 2554,
+ 'safalta': 3371,
+ 'infotech': 1908,
+ 'nov': 2570,
+ 'uts': 4124,
+ 'papa': 2721,
+ 'jones': 2053,
+ 'complete': 708,
+ 'life': 2175,
+ 'cycle': 934,
+ 'scratch': 3426,
+ 'golive': 1608,
+ 'executing': 1353,
+ 'demo': 1018,
+ 'utility': 4116,
+ 'administer': 78,
+ 'create': 862,
+ 'webserver': 4247,
+ 'performed': 2796,
+ 'resolutions': 3274,
+ 'analysed': 160,
+ 'defining': 995,
+ 'gateway': 1563,
+ 'entire': 1297,
+ 'audit': 291,
+ 'reviews': 3322,
+ 'sys': 3821,
+ 'ddd': 966,
+ 'inconsistency': 1875,
+ 'moves': 2454,
+ 'balancing': 349,
+ 'tiers': 3937,
+ 'hands': 1680,
+ 'pumdpk': 3057,
+ 'download': 1153,
+ 'executed': 1352,
+ 'nprod': 2574,
+ 'perfumed': 2798,
+ 'verification': 4164,
+ 'tests': 3910,
+ 'patching': 2756,
+ 'extracting': 1391,
+ 'daytona': 958,
+ 'dsc': 1172,
+ 'algonquin': 132,
+ 'college': 664,
+ 'canada': 515,
+ 'acceptance': 18,
+ 'hcmfscmcspihub': 1699,
+ 'batch': 372,
+ 'connect': 757,
+ 'purposes': 3071,
+ 'stored': 3722,
+ 'installconfigure': 1935,
+ 'bundles': 492,
+ 'maintain': 2258,
+ 'customization': 922,
+ 'enable': 1254,
+ 'tracing': 3974,
+ 'page': 2714,
+ 'pre': 2908,
+ 'verity': 4166,
+ 'db': 959,
+ 'nt': 2578,
+ 'admindba': 75,
+ 'multitasking': 2474,
+ 'effective': 1207,
+ 'player': 2858,
+ 'customers': 919,
+ 'selfmotivated': 3454,
+ 'quick': 3107,
+ 'learner': 2151,
+ 'bachelors': 337,
+ 'anil': 180,
+ 'neerukonda': 2522,
+ 'institute': 1943,
+ 'sciences': 3418,
+ 'andhra': 175,
+ 'awards': 320,
+ 'delight': 1006,
+ 'award': 318,
+ 'sport': 3641,
+ 'csat': 895,
+ 'score': 3423,
+ 'fathers': 1423,
+ 'g': 1549,
+ 'ananda': 171,
+ 'rayudu': 3140,
+ 'marital': 2310,
+ 'pan': 2718,
+ 'passport': 2748,
+ 'administrator': 83,
+ 'gangareddy': 1558,
+ 'objective': 2589,
+ 'utilizing': 4121,
+ 'talent': 3838,
+ 'keeping': 2094,
+ 'abreast': 7,
+ 'advancement': 93,
+ 'derive': 1040,
+ 'utmost': 4122,
+ 'successful': 3770,
+ 'separate': 3472,
+ 'host': 1756,
+ 'strategy': 3728,
+ 'ensured': 1291,
+ 'availability': 312,
+ 'failover': 1405,
+ 'spreading': 3643,
+ 'hosts': 1759,
+ 'processing': 2975,
+ 'objects': 2593,
+ 'packs': 2713,
+ 'sqr': 3652,
+ 'engine': 1271,
+ 'index': 1885,
+ 'creation': 868,
+ 'refreshing': 3204,
+ 'qa': 3083,
+ 'migrating': 2389,
+ 'evaluating': 1329,
+ 'required': 3260,
+ 'timely': 3945,
+ 'basis': 371,
+ 'jobs': 2046,
+ 'taking': 3837,
+ 'scheduled': 3404,
+ 'backup': 342,
+ 'rman': 3333,
+ 'regular': 3212,
+ 'offline': 2615,
+ 'backups': 344,
+ 'exp': 1360,
+ 'imp': 1839,
+ 'datapump': 949,
+ 'successfully': 3771,
+ 'applied': 205,
+ 'erp': 1311,
+ 'package': 2707,
+ 'hrmsfscmcrmcshcmportal': 1778,
+ 'versions': 4174,
+ 'bea': 381,
+ 'mssql': 2465,
+ 'operating': 2638,
+ 'rhel': 3325,
+ 'oel': 2605,
+ 'emergtech': 1241,
+ 'business': 494,
+ 'amerit': 155,
+ 'fleet': 1475,
+ 'sep': 3471,
+ 'administratordba': 84,
+ 'crm': 882,
+ 'elm': 1231,
+ 'pt': 3044,
+ 'kc': 2089,
+ 'services': 3487,
+ 'daily': 936,
+ 'proactive': 2964,
+ 'members': 2360,
+ 'managerpum': 2281,
+ 'purpose': 3070,
+ 'updated': 4083,
+ 'updatesfixespatches': 4086,
+ 'kept': 2096,
+ 'record': 3173,
+ 'dbs': 962,
+ 'webservers': 4249,
+ 'extensively': 1387,
+ 'delete': 1002,
+ 'monitored': 2430,
+ 'queue': 3105,
+ 'changed': 590,
+ 'psappsrvcfgpsprcscfg': 3039,
+ 'file': 1448,
+ 'specific': 3627,
+ 'checked': 599,
+ 'cleared': 626,
+ 'trace': 3972,
+ 'levels': 2164,
+ 'logfence': 2213,
+ 'parameter': 2726,
+ 'section': 3442,
+ 'appsrvcfg': 222,
+ 'code': 647,
+ 'ae': 95,
+ 'psappservcfg': 3038,
+ 'psprcscfg': 3042,
+ 'care': 533,
+ 'adding': 61,
+ 'additional': 62,
+ 'groups': 1646,
+ 'mapping': 2299,
+ 'dr': 1159,
+ 'snap': 3585,
+ 'shots': 3527,
+ 'mutli': 2483,
+ 'factor': 1400,
+ 'authentication': 296,
+ 'processes': 2973,
+ 'helping': 1718,
+ 'terms': 3903,
+ 'gaining': 1554,
+ 'executions': 1355,
+ 'document': 1139,
+ 'preparation': 2916,
+ 'steps': 3713,
+ 'murali': 2479,
+ 'infrastructure': 1910,
+ 'manually': 2293,
+ 'dpks': 1158,
+ 'installations': 1933,
+ 'capi': 524,
+ 'stat': 3700,
+ 'ssoimplementation': 3676,
+ 'compare': 698,
+ 'workstation': 4303,
+ 'developers': 1074,
+ 'testers': 3908,
+ 'modules': 2422,
+ 'sending': 3462,
+ 'messages': 2372,
+ 'dddaudit': 967,
+ 'sysaudit': 3822,
+ 'integrity': 1957,
+ 'checks': 602,
+ 'ren': 3235,
+ 'settings': 3497,
+ 'career': 534,
+ 'sembcorp': 3460,
+ 'brazil': 458,
+ 'active': 51,
+ 'fields': 1447,
+ 'additionally': 63,
+ 'enhancement': 1282,
+ 'responsibility': 3286,
+ 'assigning': 264,
+ 'roles': 3345,
+ 'privileges': 2959,
+ 'debugging': 976,
+ 'resolving': 3277,
+ 'serverweb': 3483,
+ 'serverprocess': 3481,
+ 'weeklymonthly': 4256,
+ 'maintains': 2261,
+ 'wipro': 4270,
+ 'ind': 1880,
+ 'modifying': 2419,
+ 'mover': 2453,
+ 'reporting': 3248,
+ 'interacting': 1964,
+ 'title': 3952,
+ 'asg': 253,
+ 'usa': 4098,
+ 'aix': 125,
+ 'statcapi': 3701,
+ 'hyderabad': 1798,
+ 'overall': 2695,
+ 'hrmsfscm': 1777,
+ 'deterministic': 1067,
+ 'approach': 216,
+ 'problem': 2966,
+ 'solving': 3604,
+ 'proficient': 2994,
+ 'graduated': 1627,
+ 'electronics': 1226,
+ 'mvgr': 2487,
+ 'vizianagaramjntuk': 4202,
+ 'aggregate': 105,
+ 'achieved': 35,
+ 'marks': 2315,
+ 'standard': 3690,
+ 'scored': 3424,
+ 'awarded': 319,
+ 'bravo': 457,
+ 'pat': 2753,
+ 'techahindra': 3866,
+ 'associate': 273,
+ 'month': 2433,
+ 'innovator': 1921,
+ 'time': 3941,
+ 'spot': 3642,
+ 'capgemini': 523,
+ 'respective': 3282,
+ 'axa': 329,
+ 'consultant': 779,
+ 'cognizant': 654,
+ 'technol': 3877,
+ 'ogy': 2617,
+ 'ut': 4114,
+ 'ions': 2005,
+ 'augus': 294,
+ 'april': 224,
+ 'voya': 4215,
+ 'financial': 1458,
+ 'insurance': 1945,
+ 'deals': 973,
+ 'tech': 3865,
+ 'mahindra': 2253,
+ 'limit': 2182,
+ 'ed': 1196,
+ 'july': 2068,
+ 'hr': 1771,
+ 'fin': 1454,
+ 'includes': 1872,
+ 'interfaces': 1972,
+ 'thirdparty': 3923,
+ 'live': 2197,
+ 'cio': 610,
+ 'engineer': 1272,
+ 'solaris': 3596,
+ 'administrative': 82,
+ 'supports': 3800,
+ 'version': 4172,
+ 'financialsscm': 1460,
+ 'indexes': 1887,
+ 'tables': 3828,
+ 'master': 2322,
+ 'disk': 1124,
+ 'bouncing': 447,
+ 'schedulers': 3406,
+ 'prerefresh': 2922,
+ 'activity': 54,
+ 'recompilation': 3171,
+ 'cobol': 646,
+ 'codes': 649,
+ 'handson': 1681,
+ 'aware': 321,
+ 'udm': 4049,
+ 'transfer': 3995,
+ 'gnupg': 1600,
+ 'keys': 2099,
+ 'toad': 3956,
+ 'sqldeveloper': 3648,
+ 'microsoft': 2385,
+ 'studio': 3744,
+ 'filezilla': 1450,
+ 'winscp': 4269,
+ 'pcomm': 2775,
+ 'silva': 3547,
+ 'certifications': 580,
+ 'architect': 232,
+ 'varkala': 4145,
+ 'vikas': 4183,
+ 'total': 3963,
+ 'hope': 1752,
+ 'skill': 3568,
+ 'value': 4134,
+ 'aid': 119,
+ 'companys': 697,
+ 'objectives': 2590,
+ 'anticipating': 189,
+ 'needs': 2520,
+ 'interests': 1970,
+ 'motivations': 2444,
+ 'deliver': 1007,
+ 'budget': 478,
+ 'delivering': 1011,
+ 'improving': 1861,
+ 'agility': 110,
+ 'driving': 1168,
+ 'hardware': 1686,
+ 'disaster': 1114,
+ 'recovery': 3176,
+ 'https': 1789,
+ 'health': 1707,
+ 'check': 598,
+ 'depth': 1039,
+ 'socket': 3590,
+ 'layer': 2139,
+ 'proficiency': 2993,
+ 'reconfiguration': 3172,
+ 'generating': 1576,
+ 'precompare': 2909,
+ 'station': 3708,
+ 'locking': 2210,
+ 'unlocking': 4078,
+ 'accounts': 32,
+ 'taxupdates': 3855,
+ 'internal': 1978,
+ 'consistency': 766,
+ 'alteraudit': 144,
+ 'periodically': 2802,
+ 'regularly': 3213,
+ 'compilation': 706,
+ 'guard': 1656,
+ 'proven': 3024,
+ 'contributor': 804,
+ 'area': 240,
+ 'educational': 1203,
+ 'qualification': 3090,
+ 'bsc': 472,
+ 'osmania': 2682,
+ 'progile': 3003,
+ 'hartford': 1692,
+ 'ct': 900,
+ 'adminpeoplesoft': 85,
+ 'daytoday': 957,
+ 'build': 482,
+ 'proper': 3013,
+ 'object': 2588,
+ 'involving': 2003,
+ 'building': 486,
+ 'permission': 2804,
+ 'lists': 2196,
+ 'granting': 1628,
+ 'vms': 4204,
+ 'accessing': 22,
+ 'administrating': 80,
+ 'raised': 3117,
+ 'node': 2551,
+ 'configurations': 748,
+ 'downloading': 1154,
+ 'customizations': 923,
+ 'appling': 206,
+ 'balancer': 347,
+ 'clustering': 643,
+ 'setups': 3499,
+ 'high': 1723,
+ 'pump': 3058,
+ 'utilities': 4115,
+ 'synchronisation': 3815,
+ 'documenting': 1143,
+ 'feedback': 1436,
+ 'vivekanand': 4201,
+ 'sayana': 3392,
+ 'valid': 4127,
+ 'epm': 1307,
+ 'implementations': 1845,
+ 'deploy': 1034,
+ 'interpersonal': 1983,
+ ...}
+VECTORIZATION
+COUNT VECTORIZER tells the frequency of a word.
+vectorizer1 = CountVectorizer(min_df = 1, max_df = 0.9)
+count_vect = vectorizer1.fit_transform(Resume["CV"])
+word_freq_df = pd.DataFrame({'term': vectorizer1.get_feature_names(), 'occurrences':np.asarray(count_vect.sum(axis=0)).ravel().tolist()})
+word_freq_df['frequency'] = word_freq_df['occurrences']/np.sum(word_freq_df['occurrences'])
+word_freq_df
+term	occurrences	frequency
+0	aa	1	0.000028
+1	abdul	2	0.000057
+2	abilities	4	0.000114
+3	abilitiescommunication	1	0.000028
+4	ability	37	0.001053
+...	...	...	...
+4428	òpaper	1	0.000028
+4429	òposter	1	0.000028
+4430	ôbroadband	1	0.000028
+4431	þnding	1	0.000028
+4432	þts	1	0.000028
+4433 rows × 3 columns
+
+sns.distplot(x =[word_freq_df['frequency']])
+<AxesSubplot:ylabel='Density'>
+
+TFIDF - Term frequency inverse Document Frequency
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import hstack
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer,CountVectorizer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+word_vectorizer = TfidfVectorizer(sublinear_tf=True, stop_words='english',max_features=1500)
+word_vectorizer.fit(requiredText)
+WordFeatures = word_vectorizer.transform(requiredText)
+Model Building || Model Training || Model Evaluation
+DATA PREPARATION
+x_train,x_test,y_train,y_test = train_test_split(WordFeatures, requiredTarget, random_state=0, test_size=0.2)
+print("X Train shape:",x_train.shape)
+print("Y Train shape:",y_train.shape)
+print("x Test shape:",x_test.shape)
+print("y Test shape:",y_test.shape)
+X Train shape: (63, 1500)
+Y Train shape: (63,)
+x Test shape: (16, 1500)
+y Test shape: (16,)
+1. LOGISTIC REGRESSION
+#IMPORTING NECESSARY LIBRARIES FOR LOGISTIC REGRESSION
+from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.metrics import confusion_matrix,roc_auc_score,accuracy_score,precision_score,recall_score,f1_score,classification_report
+logistic_classifier = LogisticRegression()
+logistic_classifier.fit(x_train,y_train)
+
+#Predicting on Training Data
+pred_train_log = logistic_classifier.predict(x_train)
+#Accuracy On Train Data
+train_acc_log = np.mean(pred_train_log==y_train)
+print("ACCURACY OF TRAIN DATA IN LOGISTIC REGRESSION:", train_acc_log)
+
+#Predicting on Test Data
+pred_test_log = logistic_classifier.predict(x_test)
+#Accuracy On Test Data
+test_acc_log = np.mean(pred_test_log==y_test)
+print("ACCURACY OF TEST DATA IN LOGISTIC REGRESSION:",test_acc_log )
+
+#Confusion Matrix
+logistic_cm = confusion_matrix(y_test,pred_test_log)
+
+#Classification Report
+print("CLASSIFICATION REPORT OF LOGISTIC REGRESSION:\n", classification_report(y_test,pred_test_log))
+ACCURACY OF TRAIN DATA IN LOGISTIC REGRESSION: 0.9682539682539683
+ACCURACY OF TEST DATA IN LOGISTIC REGRESSION: 0.9375
+CLASSIFICATION REPORT OF LOGISTIC REGRESSION:
+               precision    recall  f1-score   support
+
+           1       0.50      1.00      0.67         1
+           2       1.00      1.00      1.00         4
+           3       1.00      0.80      0.89         5
+           4       1.00      1.00      1.00         6
+
+    accuracy                           0.94        16
+   macro avg       0.88      0.95      0.89        16
+weighted avg       0.97      0.94      0.94        16
+
+accuracy_log = round(accuracy_score(y_test,pred_test_log),4)
+precision_log = round(precision_score(y_test,pred_test_log,average = 'macro'),4)
+recall_log = round(recall_score(y_test,pred_test_log,average = 'macro'),4)
+f1_log = round(f1_score(y_test,pred_test_log,average = 'macro'),4)
+
+#Printing Accuracy, Recall, precision, F1_score
+print('Accuracy Score   : ',accuracy_log )
+print('Precision Score  : ',precision_log )
+print('Recall Score     : ', recall_log)
+print('f1-Score         : ',f1_log )
+Accuracy Score   :  0.9375
+Precision Score  :  0.875
+Recall Score     :  0.95
+f1-Score         :  0.8889
+ 
+2. DECISION TREE
+#IMPORTING NECESSARY LIBRARIES FOR DECISION TREE
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+DT = DecisionTreeClassifier()
+DT_classifier = DecisionTreeClassifier(criterion = 'entropy', max_depth=2)
+DT_classifier.fit(x_train,y_train)
+
+#Predicting on Train Data
+pred_train_dt = DT_classifier.predict(x_train)
+#Accuracy On Train Data
+train_acc_dt = np.mean(pred_train_dt==y_train)
+print("ACCURACY OF TRAIN DATA IN DECISION TREE:",train_acc_dt )
+
+#Predicting on Test Data
+pred_test_dt = DT_classifier.predict(x_test)
+#Accuracy on Test Data
+test_acc_dt = np.mean(pred_test_dt==y_test)
+print("ACCURACY OF TEST DATA IN DECISION TREE:",test_acc_dt )
+
+#Confusion Matrix
+dt_cm = confusion_matrix(y_test,pred_test_dt)
+
+#Classification Report
+print("CLASSIFICATION REPORT OF DECISION TREE:\n", classification_report(y_test,pred_test_dt))
+ACCURACY OF TRAIN DATA IN DECISION TREE: 0.8253968253968254
+ACCURACY OF TEST DATA IN DECISION TREE: 0.6875
+CLASSIFICATION REPORT OF DECISION TREE:
+               precision    recall  f1-score   support
+
+           1       1.00      1.00      1.00         1
+           2       0.44      1.00      0.62         4
+           3       0.00      0.00      0.00         5
+           4       1.00      1.00      1.00         6
+
+    accuracy                           0.69        16
+   macro avg       0.61      0.75      0.65        16
+weighted avg       0.55      0.69      0.59        16
+
+accuracy_dt = round(accuracy_score(y_test,pred_test_dt),4)
+precision_dt = round(precision_score(y_test,pred_test_dt,average = 'macro'),4)
+recall_dt = round(recall_score(y_test,pred_test_dt,average = 'macro'),4)
+f1_dt = round(f1_score(y_test,pred_test_dt,average = 'macro'),4)
+
+#Printing Accuracy, Recall, precision, F1_score
+print('Accuracy Score   : ',accuracy_dt )
+print('Precision Score  : ',precision_dt )
+print('Recall Score     : ', recall_dt)
+print('f1-Score         : ',f1_dt )
+Accuracy Score   :  0.6875
+Precision Score  :  0.6111
+Recall Score     :  0.75
+f1-Score         :  0.6538
+3. RANDOM FOREST
+#IMPORTING NECESSARY LIBRARIES FOR RANDOM FOREST
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.ensemble import RandomForestClassifier
+RF = {'n_estimators':15,'class_weight': "balanced",'n_jobs':-1,'random_state':42}
+RF_classifier = RandomForestClassifier(**RF)
+RF_classifier.fit(x_train,y_train)
+
+#Predicting on Train Data
+pred_train_rf = RF_classifier.predict(x_train)
+#Accuracy On Train Data
+train_acc_rf = np.mean(pred_train_rf==y_train)
+print("ACCURACY OF TRAIN DATA IN RANDOM FOREST:",train_acc_rf)
+
+#Predicting on Test Data
+pred_test_rf = RF_classifier.predict(x_test)
+#Accuracy On Test Data
+test_acc_rf = np.mean(pred_test_rf==y_test)
+print("ACCURACY OF TEST DATA IN RANDOM FOREST:",test_acc_rf )
+
+#Confusion Matrix
+rf_cm = confusion_matrix(y_test,pred_test_rf)
+
+#Classification Report
+print("CLASSIFICATION REPORT OF RANDOM FOREST:\n", classification_report(y_test,pred_test_rf))
+ACCURACY OF TRAIN DATA IN RANDOM FOREST: 1.0
+ACCURACY OF TEST DATA IN RANDOM FOREST: 1.0
+CLASSIFICATION REPORT OF RANDOM FOREST:
+               precision    recall  f1-score   support
+
+           1       1.00      1.00      1.00         1
+           2       1.00      1.00      1.00         4
+           3       1.00      1.00      1.00         5
+           4       1.00      1.00      1.00         6
+
+    accuracy                           1.00        16
+   macro avg       1.00      1.00      1.00        16
+weighted avg       1.00      1.00      1.00        16
+
+accuracy_rf = round(accuracy_score(y_test,pred_test_rf),4)
+precision_rf = round(precision_score(y_test,pred_test_rf,average = 'macro'),4)
+recall_rf = round(recall_score(y_test,pred_test_rf,average = 'macro'),4)
+f1_rf = round(f1_score(y_test,pred_test_rf,average = 'macro'),4)
+
+#Printing Accuracy, Recall, precision, F1_score
+print('Accuracy Score   : ',accuracy_rf )
+print('Precision Score  : ',precision_rf )
+print('Recall Score     : ', recall_rf)
+print('f1-Score         : ',f1_rf )
+Accuracy Score   :  1.0
+Precision Score  :  1.0
+Recall Score     :  1.0
+f1-Score         :  1.0
+4. MULTINOMIAL NAVIE BAYES
+#IMPORTING NECESSARY LIBRARIES FOR MULTINOMIAL NAVIE BAYES
+from sklearn.naive_bayes import MultinomialNB as MB
+classifier_mb = MB()
+classifier_mb.fit(x_train,y_train)
+
+#Predicting On Train Data
+pred_train_mb = classifier_mb.predict(x_train)
+#Accuracy On Train Data
+train_acc_mb = np.mean(pred_train_mb==y_train)
+print("ACCURACY OF TRAIN DATA IN MULTINOMIAL NAVIE BAYES:", train_acc_mb)
+
+#Predicting On Test Data
+pred_test_mb = classifier_mb.predict(x_test)
+#Accuracy On Test Data
+test_acc_mb = np.mean(pred_test_mb==y_test)
+print("ACCURACY OF TEST DATA IN MULTINOMIAL NAVIE BAYES:", test_acc_mb)
+
+#Confusion Matrix
+mb_cm = confusion_matrix(y_test,pred_test_mb)
+
+#Classification Report
+print("CLASSIFICATION REPORT OF MULTINOMIAL NAVIE BAYES:\n", classification_report(y_test,pred_test_mb))
+ACCURACY OF TRAIN DATA IN MULTINOMIAL NAVIE BAYES: 0.9682539682539683
+ACCURACY OF TEST DATA IN MULTINOMIAL NAVIE BAYES: 0.875
+CLASSIFICATION REPORT OF MULTINOMIAL NAVIE BAYES:
+               precision    recall  f1-score   support
+
+           1       0.50      1.00      0.67         1
+           2       0.80      1.00      0.89         4
+           3       1.00      0.60      0.75         5
+           4       1.00      1.00      1.00         6
+
+    accuracy                           0.88        16
+   macro avg       0.82      0.90      0.83        16
+weighted avg       0.92      0.88      0.87        16
+
+accuracy_mb = round(accuracy_score(y_test,pred_test_mb),4)
+precision_mb = round(precision_score(y_test,pred_test_mb,average = 'macro'),4)
+recall_mb = round(recall_score(y_test,pred_test_mb,average = 'macro'),4)
+f1_mb = round(f1_score(y_test,pred_test_mb,average = 'macro'),4)
+
+#Printing Accuracy, Recall, precision, F1_score
+print('Accuracy Score   : ',accuracy_mb )
+print('Precision Score  : ',precision_mb )
+print('Recall Score     : ', recall_mb)
+print('f1-Score         : ',f1_mb )
+Accuracy Score   :  0.875
+Precision Score  :  0.825
+Recall Score     :  0.9
+f1-Score         :  0.8264
+5. SUPPORT VECTOR MACHINE
+##IMPORTING NECESSARY LIBRARIES FOR SUPPORT VECTOR MACHINE
+from sklearn import svm
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
+svm_classifier = (SVC(kernel='linear'))
+svm_classifier.fit(x_train,y_train)
+
+#Predicting On Train Data
+pred_train_svm = svm_classifier.predict(x_train)
+#Accuracy On Train Data
+train_acc_svm = np.mean(pred_train_svm==y_train)
+print("ACCURACY OF TRAIN DATA IN SUPPORT VECTOR MACHINE:",train_acc_svm )
+
+#Prediciting On Test Data
+pred_test_svm = svm_classifier.predict(x_test)
+#Accuracy On Test Data
+test_acc_svm = np.mean(pred_test_svm==y_test)
+print("ACCURACY OF TEST DATA IN SUPPORT VECTOR MACHINE:",test_acc_svm)
+
+#Confusion Matrix
+svm_cm = confusion_matrix(y_test,pred_test_svm)
+
+#Classification Report
+print("CLASSIFICATION REPORT OF SUPPORT VECTOR MACHINE:\n", classification_report(y_test,pred_test_svm))
+ACCURACY OF TRAIN DATA IN SUPPORT VECTOR MACHINE: 1.0
+ACCURACY OF TEST DATA IN SUPPORT VECTOR MACHINE: 1.0
+CLASSIFICATION REPORT OF SUPPORT VECTOR MACHINE:
+               precision    recall  f1-score   support
+
+           1       1.00      1.00      1.00         1
+           2       1.00      1.00      1.00         4
+           3       1.00      1.00      1.00         5
+           4       1.00      1.00      1.00         6
+
+    accuracy                           1.00        16
+   macro avg       1.00      1.00      1.00        16
+weighted avg       1.00      1.00      1.00        16
+
+accuracy_svm = round(accuracy_score(y_test,pred_test_svm),4)
+precision_svm = round(precision_score(y_test,pred_test_svm,average = 'macro'),4)
+recall_svm = round(recall_score(y_test,pred_test_svm,average = 'macro'),4)
+f1_svm = round(f1_score(y_test,pred_test_svm,average = 'macro'),4)
+
+#Printing Accuracy, Recall, precision, F1_score
+print('Accuracy Score   : ',accuracy_svm )
+print('Precision Score  : ',precision_svm )
+print('Recall Score     : ', recall_svm)
+print('f1-Score         : ',f1_svm )
+Accuracy Score   :  1.0
+Precision Score  :  1.0
+Recall Score     :  1.0
+f1-Score         :  1.0
+CONFUSION MATRIX
+plt.figure(figsize=(20,15))
+
+plt.suptitle("Confusion Matrixes", fontsize=18)
+
+plt.subplot(2,3,1)
+plt.title("LOGISTIC REGRESSION")
+sns.heatmap(logistic_cm, cbar=False, annot=True, cmap="mako",  fmt="d")
+
+plt.subplot(2,3,2)
+plt.title("DECISION TREE")
+sns.heatmap(dt_cm, cbar=False, annot=True, cmap="Blues", fmt="d")
+
+plt.subplot(2,3,3)
+plt.title("RANDOM FOREST CLASSIFICATION")
+sns.heatmap(rf_cm, cbar=False, annot=True, cmap="BuPu", fmt="d")
+
+plt.subplot(2,3,4)
+plt.title("NaiveBayes Classification")
+sns.heatmap(mb_cm, cbar=False, annot=True, cmap="Greens", fmt="d")
+
+plt.subplot(2,3,5)
+plt.title("SVM Classification")
+sns.heatmap(svm_cm, cbar=False, annot=True, cmap="YlGnBu",  fmt="d")
+
+plt.show()
+
+table = {'Classifier' : ['LOGISTIC REGRESSION', 'DECISION TREE', 'RANDOM FOREST', 'MULTINOMIAL NAIVE BAYES', 'SUPPORT VECTOR MACHINE'], 'Accuracy_Score' : [accuracy_log, accuracy_dt, accuracy_rf, accuracy_mb, accuracy_svm], 'Precision_Score' : [precision_log, precision_dt, precision_rf, precision_mb, precision_svm], 'Recall_Score' : [recall_log, recall_dt, recall_rf, recall_mb, recall_svm], 'F1-Score' : [f1_log, f1_dt, f1_rf, f1_mb, f1_svm]}
+table = pd.DataFrame(table)
+table
+Classifier	Accuracy_Score	Precision_Score	Recall_Score	F1-Score
+0	LOGISTIC REGRESSION	0.9375	0.8750	0.95	0.8889
+1	DECISION TREE	0.6875	0.6111	0.75	0.6538
+2	RANDOM FOREST	1.0000	1.0000	1.00	1.0000
+3	MULTINOMIAL NAIVE BAYES	0.8750	0.8250	0.90	0.8264
+4	SUPPORT VECTOR MACHINE	1.0000	1.0000	1.00	1.0000
+ACCURACY COMPARISON PLOT
+#Accuracy
+plt.figure(figsize=(15,6))
+ax= sns.barplot(x=table.Classifier, y=table.Accuracy_Score, palette =sns.color_palette("Set2") )
+ax.set_xticklabels(ax.get_xticklabels(),rotation=30)
+plt.xlabel('Classification Models')
+plt.ylabel('Accuracy')
+plt.title('Accuracy Scores of Classification Models')
+for i in ax.patches:
+    ax.text(i.get_x()+.19, i.get_height()-0.3, \
+            str(round((i.get_height()), 4)), fontsize=15, color='b')
+plt.show()
+
+FINALIZING MODEL
+We finalize RANDOM FOREST as it gives 100% Accuracy. Random Forest fits the model in Resume Classification.
+Deployment Process
+import pickle
+from pickle import dump
+from pickle import load
+dump(RF ,open('Random_Forest_model.pkl','wb'))
+loaded_model = load(open('Random_Forest_model.pkl','rb'))
+ 
